@@ -10,38 +10,10 @@ bitcoin-cli -regtest loadwallet "btrustwallet" > /dev/null 2>&1
 # Extract the TXID
 TX_TXID=$(bitcoin-cli -regtest decoderawtransaction $RAW_TX | jq -r '.txid')
 
-# Extract the values of vout 0 and vout 1
-VAL_0=$(bitcoin-cli -regtest decoderawtransaction $RAW_TX | jq -r '.vout[0].value')
-VAL_1=$(bitcoin-cli -regtest decoderawtransaction $RAW_TX | jq -r '.vout[1].value')
-
-# Calculate target block (Current block 25 + 2016 blocks for 2 weeks)
-LOCKTIME=$((25 + 2016))
-
-# Sequence for timelock
-SEQ=4294967294
-
-# Destination Details
-DEST_ADDR="2MvLcssW49n9atmksjwg2ZCMsEMsoj3pzUP"
-AMOUNT=0.2
-FEE=0.0001
-
-# Calculate Change Amount using 'bc' (since bash doesn't do floating-point math natively)
-CHANGE_AMOUNT=$(echo "$VAL_0 + $VAL_1 - $AMOUNT - $FEE" | bc | awk '{printf "%.8f\n", $0}')
-CHANGE_ADDR=$(bitcoin-cli -regtest getnewaddress)
-
-bitcoin-cli -regtest createrawtransaction "[
-  {
-    \"txid\": \"$TX_TXID\",
-    \"vout\": 0,
-    \"sequence\": $SEQ
-  },
-  {
-    \"txid\": \"$TX_TXID\",
-    \"vout\": 1,
-    \"sequence\": $SEQ
-  }
-]" "{
-  \"$DEST_ADDR\": $AMOUNT,
-  \"$CHANGE_ADDR\": $CHANGE_AMOUNT
-}" $LOCKTIME
+# 2 weeks ≈ 2016 blocks; current block 25 → locktime 25 + 2016 = 2041
+# Spend both outputs of the given transaction
+bitcoin-cli -regtest -named createrawtransaction \
+  inputs='''[ { "txid": "'"$TXID"'", "vout": 0 }, { "txid": "'"$TXID"'", "vout": 1 } ]''' \
+  outputs='''{ "2MvLcssW49n9atmksjwg2ZCMsEMsoj3pzUP": 0.2 }''' \
+  locktime=2041
 
